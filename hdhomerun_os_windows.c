@@ -28,19 +28,21 @@ uint32_t random_get32(void)
 #else
 uint32_t random_get32(void)
 {
+	HCRYPTPROV *phProv;
+	uint32_t Result;
+
 	static DWORD random_get32_context_tls = 0xFFFFFFFF;
 	if (random_get32_context_tls == 0xFFFFFFFF) {
 		random_get32_context_tls = TlsAlloc();
 	}
 
-	HCRYPTPROV *phProv = (HCRYPTPROV *)TlsGetValue(random_get32_context_tls);
+	phProv = (HCRYPTPROV *)TlsGetValue(random_get32_context_tls);
 	if (!phProv) {
 		phProv = (HCRYPTPROV *)calloc(1, sizeof(HCRYPTPROV));
 		CryptAcquireContext(phProv, 0, 0, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT);
 		TlsSetValue(random_get32_context_tls, phProv);
 	}
 
-	uint32_t Result;
 	if (!CryptGenRandom(*phProv, sizeof(Result), (BYTE *)&Result)) {
 		return (uint32_t)getcurrenttime();
 	}
@@ -165,11 +167,12 @@ void thread_cond_wait_with_timeout(thread_cond_t *cond, uint64_t max_wait_time)
 
 bool hdhomerun_vsprintf(char *buffer, char *end, const char *fmt, va_list ap)
 {
+	int length;
 	if (buffer >= end) {
 		return false;
 	}
 
-	int length = _vsnprintf(buffer, end - buffer - 1, fmt, ap);
+	length = _vsnprintf(buffer, end - buffer - 1, fmt, ap);
 	if (length < 0) {
 		*buffer = 0;
 		return false;
@@ -186,9 +189,10 @@ bool hdhomerun_vsprintf(char *buffer, char *end, const char *fmt, va_list ap)
 
 bool hdhomerun_sprintf(char *buffer, char *end, const char *fmt, ...)
 {
+	bool result;
 	va_list ap;
 	va_start(ap, fmt);
-	bool result = hdhomerun_vsprintf(buffer, end, fmt, ap);
+	result = hdhomerun_vsprintf(buffer, end, fmt, ap);
 	va_end(ap);
 	return result;
 }

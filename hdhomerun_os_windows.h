@@ -40,11 +40,16 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdint.h>
-#include <stdbool.h>
 #include <string.h>
 #include <signal.h>
 #include <time.h>
 #include <sys/types.h>
+
+
+#define bool int
+#define false 0
+#define true !false
+
 
 #ifdef LIBHDHOMERUN_DLLEXPORT
 #define LIBHDHOMERUN_API __declspec(dllexport)

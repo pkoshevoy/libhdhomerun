@@ -188,6 +188,10 @@ void hdhomerun_pkt_write_mem(struct hdhomerun_pkt_t *pkt, const void *mem, size_
 
 int hdhomerun_pkt_open_frame(struct hdhomerun_pkt_t *pkt, uint16_t *ptype)
 {
+	size_t length;
+	uint32_t calc_crc;
+	uint32_t packet_crc;
+
 	pkt->pos = pkt->start;
 
 	if (pkt->pos + 4 > pkt->end) {
@@ -195,7 +199,7 @@ int hdhomerun_pkt_open_frame(struct hdhomerun_pkt_t *pkt, uint16_t *ptype)
 	}
 
 	*ptype = hdhomerun_pkt_read_u16(pkt);
-	size_t length = hdhomerun_pkt_read_u16(pkt);
+	length = hdhomerun_pkt_read_u16(pkt);
 	pkt->pos += length;
 
 	if (pkt->pos + 4 > pkt->end) {
@@ -203,9 +207,8 @@ int hdhomerun_pkt_open_frame(struct hdhomerun_pkt_t *pkt, uint16_t *ptype)
 		return 0;
 	}
 
-	uint32_t calc_crc = hdhomerun_pkt_calc_crc(pkt->start, pkt->pos);
+	calc_crc = hdhomerun_pkt_calc_crc(pkt->start, pkt->pos);
 
-	uint32_t packet_crc;
 	packet_crc =  (uint32_t)*pkt->pos++ << 0;
 	packet_crc |= (uint32_t)*pkt->pos++ << 8;
 	packet_crc |= (uint32_t)*pkt->pos++ << 16;
@@ -223,13 +226,14 @@ int hdhomerun_pkt_open_frame(struct hdhomerun_pkt_t *pkt, uint16_t *ptype)
 void hdhomerun_pkt_seal_frame(struct hdhomerun_pkt_t *pkt, uint16_t frame_type)
 {
 	size_t length = pkt->end - pkt->start;
+	uint32_t crc;
 
 	pkt->start -= 4;
 	pkt->pos = pkt->start;
 	hdhomerun_pkt_write_u16(pkt, frame_type);
 	hdhomerun_pkt_write_u16(pkt, (uint16_t)length);
 
-	uint32_t crc = hdhomerun_pkt_calc_crc(pkt->start, pkt->end);
+	crc = hdhomerun_pkt_calc_crc(pkt->start, pkt->end);
 	*pkt->end++ = (uint8_t)(crc >> 0);
 	*pkt->end++ = (uint8_t)(crc >> 8);
 	*pkt->end++ = (uint8_t)(crc >> 16);

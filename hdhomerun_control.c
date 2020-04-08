@@ -78,6 +78,8 @@ void hdhomerun_control_destroy(struct hdhomerun_control_sock_t *cs)
 
 static bool hdhomerun_control_connect_sock(struct hdhomerun_control_sock_t *cs)
 {
+	struct hdhomerun_discover_device_t result;
+
 	if (cs->sock) {
 		return true;
 	}
@@ -92,7 +94,6 @@ static bool hdhomerun_control_connect_sock(struct hdhomerun_control_sock_t *cs)
 	}
 
 	/* Find device. */
-	struct hdhomerun_discover_device_t result;
 	if (hdhomerun_discover_find_devices_custom_v2(cs->desired_device_ip, HDHOMERUN_DEVICE_TYPE_WILDCARD, cs->desired_device_id, &result, 1) <= 0) {
 		hdhomerun_debug_printf(cs->dbg, "hdhomerun_control_connect_sock: device not found\n");
 		return false;
@@ -150,12 +151,14 @@ uint32_t hdhomerun_control_get_device_ip_requested(struct hdhomerun_control_sock
 
 uint32_t hdhomerun_control_get_local_addr(struct hdhomerun_control_sock_t *cs)
 {
+	uint32_t addr;
+
 	if (!hdhomerun_control_connect_sock(cs)) {
 		hdhomerun_debug_printf(cs->dbg, "hdhomerun_control_get_local_addr: connect failed\n");
 		return 0;
 	}
 
-	uint32_t addr = hdhomerun_sock_getsockname_addr(cs->sock);
+	addr = hdhomerun_sock_getsockname_addr(cs->sock);
 	if (addr == 0) {
 		hdhomerun_debug_printf(cs->dbg, "hdhomerun_control_get_local_addr: getsockname failed (%d)\n", hdhomerun_sock_getlasterror());
 		return 0;
@@ -181,6 +184,8 @@ static bool hdhomerun_control_recv_sock(struct hdhomerun_control_sock_t *cs, str
 	hdhomerun_pkt_reset(rx_pkt);
 
 	while (1) {
+		int ret;
+		size_t length;
 		uint64_t current_time = getcurrenttime();
 		if (current_time >= stop_time) {
 			hdhomerun_debug_printf(cs->dbg, "hdhomerun_control_recv_sock: timeout\n");
@@ -188,7 +193,7 @@ static bool hdhomerun_control_recv_sock(struct hdhomerun_control_sock_t *cs, str
 			return false;
 		}
 
-		size_t length = rx_pkt->limit - rx_pkt->end;
+		length = rx_pkt->limit - rx_pkt->end;
 		if (!hdhomerun_sock_recv(cs->sock, rx_pkt->end, &length, stop_time - current_time)) {
 			hdhomerun_debug_printf(cs->dbg, "hdhomerun_control_recv_sock: recv failed (%d)\n", hdhomerun_sock_getlasterror());
 			hdhomerun_control_close_sock(cs);
@@ -197,7 +202,7 @@ static bool hdhomerun_control_recv_sock(struct hdhomerun_control_sock_t *cs, str
 
 		rx_pkt->end += length;
 
-		int ret = hdhomerun_pkt_open_frame(rx_pkt, ptype);
+		ret = hdhomerun_pkt_open_frame(rx_pkt, ptype);
 		if (ret < 0) {
 			hdhomerun_debug_printf(cs->dbg, "hdhomerun_control_recv_sock: frame error\n");
 			hdhomerun_control_close_sock(cs);
@@ -211,10 +216,12 @@ static bool hdhomerun_control_recv_sock(struct hdhomerun_control_sock_t *cs, str
 
 static int hdhomerun_control_send_recv_internal(struct hdhomerun_control_sock_t *cs, struct hdhomerun_pkt_t *tx_pkt, struct hdhomerun_pkt_t *rx_pkt, uint16_t type, uint64_t recv_timeout)
 {
+	int i;
 	hdhomerun_pkt_seal_frame(tx_pkt, type);
 
-	int i;
 	for (i = 0; i < 2; i++) {
+		uint16_t rsp_type;
+
 		if (!cs->sock) {
 			if (!hdhomerun_control_connect_sock(cs)) {
 				hdhomerun_debug_printf(cs->dbg, "hdhomerun_control_send_recv: connect failed\n");
@@ -229,7 +236,6 @@ static int hdhomerun_control_send_recv_internal(struct hdhomerun_control_sock_t 
 			return 1;
 		}
 
-		uint16_t rsp_type;
 		if (!hdhomerun_control_recv_sock(cs, rx_pkt, &rsp_type, recv_timeout)) {
 			continue;
 		}
@@ -253,13 +259,14 @@ int hdhomerun_control_send_recv(struct hdhomerun_control_sock_t *cs, struct hdho
 
 static int hdhomerun_control_get_set(struct hdhomerun_control_sock_t *cs, const char *name, const char *value, uint32_t lockkey, char **pvalue, char **perror)
 {
+	size_t name_len;
 	struct hdhomerun_pkt_t *tx_pkt = &cs->tx_pkt;
 	struct hdhomerun_pkt_t *rx_pkt = &cs->rx_pkt;
 
 	/* Request. */
 	hdhomerun_pkt_reset(tx_pkt);
 
-	size_t name_len = strlen(name) + 1;
+	name_len = strlen(name) + 1;
 	if (tx_pkt->end + 3 + name_len > tx_pkt->limit) {
 		hdhomerun_debug_printf(cs->dbg, "hdhomerun_control_get_set: request too long\n");
 		return -1;

@@ -243,8 +243,9 @@ void hdhomerun_debug_flush(struct hdhomerun_debug_t *dbg, uint64_t timeout)
 	timeout = getcurrenttime() + timeout;
 
 	while (getcurrenttime() < timeout) {
+		struct hdhomerun_debug_message_t *message;
 		thread_mutex_lock(&dbg->queue_lock);
-		struct hdhomerun_debug_message_t *message = dbg->queue_head;
+		message = dbg->queue_head;
 		thread_mutex_unlock(&dbg->queue_lock);
 
 		if (!message) {
@@ -265,25 +266,31 @@ void hdhomerun_debug_printf(struct hdhomerun_debug_t *dbg, const char *fmt, ...)
 
 void hdhomerun_debug_vprintf(struct hdhomerun_debug_t *dbg, const char *fmt, va_list args)
 {
+	struct hdhomerun_debug_message_t *message;
+	char *ptr;
+	char *end;
+	time_t current_time;
+	bool signal_thread;
+
 	if (!dbg) {
 		return;
 	}
 
-	struct hdhomerun_debug_message_t *message = (struct hdhomerun_debug_message_t *)malloc(sizeof(struct hdhomerun_debug_message_t));
+	message = (struct hdhomerun_debug_message_t *)malloc(sizeof(struct hdhomerun_debug_message_t));
 	if (!message) {
 		return;
 	}
 
 	message->next = NULL;
 
-	char *ptr = message->buffer;
-	char *end = message->buffer + sizeof(message->buffer) - 2;
+	ptr = message->buffer;
+	end = message->buffer + sizeof(message->buffer) - 2;
 	*end = 0;
 
 	/*
 	 * Timestamp.
 	 */
-	time_t current_time = time(NULL);
+	current_time = time(NULL);
 	ptr += strftime(ptr, end - ptr, "%Y%m%d-%H:%M:%S ", localtime(&current_time));
 	if (ptr > end) {
 		ptr = end;
@@ -327,7 +334,7 @@ void hdhomerun_debug_vprintf(struct hdhomerun_debug_t *dbg, const char *fmt, va_
 	dbg->queue_tail = message;
 	dbg->queue_depth++;
 
-	bool signal_thread = dbg->enabled || (dbg->queue_depth > 1024 + 100);
+	signal_thread = dbg->enabled || (dbg->queue_depth > 1024 + 100);
 
 	thread_mutex_unlock(&dbg->queue_lock);
 
@@ -361,7 +368,9 @@ static bool hdhomerun_debug_output_message_file(struct hdhomerun_debug_t *dbg, s
 /* Send lock held by caller */
 static bool hdhomerun_debug_output_message_sock(struct hdhomerun_debug_t *dbg, struct hdhomerun_debug_message_t *message)
 {
+	size_t length;
 	if (!dbg->sock) {
+		uint32_t remote_addr;
 		uint64_t current_time = getcurrenttime();
 		if (current_time < dbg->connect_delay) {
 			return false;
@@ -373,7 +382,7 @@ static bool hdhomerun_debug_output_message_sock(struct hdhomerun_debug_t *dbg, s
 			return false;
 		}
 
-		uint32_t remote_addr = hdhomerun_sock_getaddrinfo_addr(dbg->sock, HDHOMERUN_DEBUG_HOST);
+		remote_addr = hdhomerun_sock_getaddrinfo_addr(dbg->sock, HDHOMERUN_DEBUG_HOST);
 		if (remote_addr == 0) {
 			hdhomerun_debug_close_internal(dbg);
 			return false;
@@ -385,7 +394,7 @@ static bool hdhomerun_debug_output_message_sock(struct hdhomerun_debug_t *dbg, s
 		}
 	}
 
-	size_t length = strlen(message->buffer);
+	length = strlen(message->buffer);
 	if (!hdhomerun_sock_send(dbg->sock, message->buffer, length, HDHOMERUN_DEBUG_SEND_TIMEOUT)) {
 		hdhomerun_debug_close_internal(dbg);
 		return false;
@@ -396,9 +405,9 @@ static bool hdhomerun_debug_output_message_sock(struct hdhomerun_debug_t *dbg, s
 
 static bool hdhomerun_debug_output_message(struct hdhomerun_debug_t *dbg, struct hdhomerun_debug_message_t *message)
 {
+	bool ret;
 	thread_mutex_lock(&dbg->send_lock);
 
-	bool ret;
 	if (dbg->file_name) {
 		ret = hdhomerun_debug_output_message_file(dbg, message);
 	} else {
@@ -411,9 +420,10 @@ static bool hdhomerun_debug_output_message(struct hdhomerun_debug_t *dbg, struct
 
 static void hdhomerun_debug_pop_and_free_message(struct hdhomerun_debug_t *dbg)
 {
+	struct hdhomerun_debug_message_t *message;
 	thread_mutex_lock(&dbg->queue_lock);
 
-	struct hdhomerun_debug_message_t *message = dbg->queue_head;
+	message = dbg->queue_head;
 	dbg->queue_head = message->next;
 	if (!dbg->queue_head) {
 		dbg->queue_tail = NULL;
@@ -430,9 +440,11 @@ static void hdhomerun_debug_thread_execute(void *arg)
 	struct hdhomerun_debug_t *dbg = (struct hdhomerun_debug_t *)arg;
 
 	while (!dbg->terminate) {
+		struct hdhomerun_debug_message_t *message;
+		uint32_t queue_depth;
 		thread_mutex_lock(&dbg->queue_lock);
-		struct hdhomerun_debug_message_t *message = dbg->queue_head;
-		uint32_t queue_depth = dbg->queue_depth;
+		message = dbg->queue_head;
+		queue_depth = dbg->queue_depth;
 		thread_mutex_unlock(&dbg->queue_lock);
 
 		if (!message) {

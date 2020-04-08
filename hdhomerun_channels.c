@@ -301,9 +301,10 @@ uint32_t hdhomerun_channel_number_to_frequency(struct hdhomerun_channel_list_t *
 
 uint16_t hdhomerun_channel_frequency_to_number(struct hdhomerun_channel_list_t *channel_list, uint32_t frequency)
 {
+	struct hdhomerun_channel_entry_t *entry;
 	frequency = hdhomerun_channel_frequency_round_normal(frequency);
 
-	struct hdhomerun_channel_entry_t *entry = hdhomerun_channel_list_first(channel_list);
+	entry = hdhomerun_channel_list_first(channel_list);
 	while (entry) {
 		if (entry->frequency == frequency) {
 			return entry->channel_number;
@@ -388,12 +389,13 @@ void hdhomerun_channel_list_destroy(struct hdhomerun_channel_list_t *channel_lis
 
 struct hdhomerun_channel_list_t *hdhomerun_channel_list_create(const char *channelmap)
 {
+	const struct hdhomerun_channelmap_record_t *record;
 	struct hdhomerun_channel_list_t *channel_list = (struct hdhomerun_channel_list_t *)calloc(1, sizeof(struct hdhomerun_channel_list_t));
 	if (!channel_list) {
 		return NULL;
 	}
 
-	const struct hdhomerun_channelmap_record_t *record = hdhomerun_channelmap_table;
+	record = hdhomerun_channelmap_table;
 	while (record->channelmap) {
 		if (!strstr(channelmap, record->channelmap)) {
 			record++;
