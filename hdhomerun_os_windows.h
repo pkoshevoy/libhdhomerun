@@ -45,10 +45,11 @@
 #include <time.h>
 #include <sys/types.h>
 
-
+#if _MSC_VER < 1700 && !defined(__cplusplus)
 #define bool int
 #define false 0
 #define true !false
+#endif
 
 
 #ifdef LIBHDHOMERUN_DLLEXPORT
