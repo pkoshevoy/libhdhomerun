@@ -46,7 +46,7 @@
 #include <sys/types.h>
 
 #if _MSC_VER < 1700 && !defined(__cplusplus)
-#define bool int
+#define bool char
 #define false 0
 #define true !false
 #endif
